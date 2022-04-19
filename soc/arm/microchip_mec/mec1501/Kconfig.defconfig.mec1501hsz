@@ -19,6 +19,14 @@ config ESPI_XEC
 	default y
 	depends on ESPI
 
+config ESPI_SAF_XEC
+	default y
+	depends on ESPI_SAF
+
+config COUNTER_XEC
+	default y
+	depends on COUNTER
+
 config PS2_XEC
 	default y
 	depends on PS2

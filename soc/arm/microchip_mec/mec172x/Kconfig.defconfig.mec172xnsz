@@ -23,4 +23,12 @@ config EEPROM_XEC
 	default y
 	depends on EEPROM
 
+config ESPI_SAF_XEC_V2
+	default y
+	depends on ESPI_SAF
+
+config SPI_XEC_QMSPI_LDMA
+	default y
+	depends on SPI
+
 endif # SOC_MEC172X_NSZ
