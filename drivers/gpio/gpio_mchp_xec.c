@@ -47,6 +47,90 @@ struct gpio_xec_config {
 	uint32_t flags;
 };
 
+typedef union {
+	uint32_t VALUE;
+	struct {
+		uint32_t PU_PD              :2;    // bits[1:0] internal pull up/down selection
+		uint32_t PGS                :2;    // bits[3:2] power gating
+		uint32_t INT_DET_EDGE_EN    :3;    // bits[6:4] interrupt detection mode
+		uint32_t EDGE_END           :1;    // bits[7] edge enable
+		uint32_t OBUFT              :1;    // bits[8] output buffer type: push-pull or open-drain
+		uint32_t DIR                :1;    // bits[9] direction
+		uint32_t AOD                :1;    // bits[10] alternate output disable.
+		uint32_t POL                :1;    // bits[11] GPIO function output polarity
+		uint32_t MUX                :2;    // bits[13:12] pin mux (function)
+		uint32_t                    :1;    // bits[14] read-only 0 reserved
+		uint32_t INPAD_DIS          :1;    // bits[15] disables input pad
+		uint32_t OUTVAL             :1;    // bits[16]: alternate output pin value. enabled when bit[10]==0(default)
+		uint32_t                    :7;    // bits[23:17] reserved
+		uint32_t INPAD_VAL          :1;    // bits[24] input pad value. always live unless input pad is powered down
+		uint32_t                    :7;    // bits[31:25] reserved
+	} bitfld;
+}GpioPinControlRegister;
+
+static int gpio_ryan_configure(const struct device *dev,
+			      gpio_pin_t pin, gpio_flags_t flags)
+{
+	const struct gpio_xec_config *config = dev->config;
+	__IO uint32_t *current_pcr1;
+
+	GpioPinControlRegister GpioCTL;
+	GpioCTL.VALUE = 0;
+
+	/* Don't support "open source" mode */
+	if (((flags & GPIO_SINGLE_ENDED) != 0U) &&
+	    ((flags & GPIO_LINE_OPEN_DRAIN) == 0U)) {
+		return -ENOTSUP;
+	}
+
+	if ((flags & GPIO_PULL_UP) != 0U) {
+		//Enable the pull and select the pullup resistor.
+		GpioCTL.bitfld.PU_PD = 0x01; //bits[1:0] 00=none, 01=pull up enabled, 10=pull down enabled, 11=repeater mode
+	} else if ((flags & GPIO_PULL_DOWN) != 0U) {
+		//Enable the pull and select the pulldown resistor
+		GpioCTL.bitfld.PU_PD = 0x10;
+	}
+
+	//Make sure disconnected on first control register write
+	if (flags == GPIO_DISCONNECTED) {
+		GpioCTL.bitfld.PGS = 0x10; //bits[3:2] 00=VTR, 01=VCC, 10=Unpowered, 11=Reserved
+	}else{
+		GpioCTL.bitfld.PGS = 0x00;
+	}
+
+	if ((flags & GPIO_OPEN_DRAIN) != 0U) {
+		//Open drain
+		GpioCTL.bitfld.OBUFT = 0x01; //bits[8] 0=push-pull, 1=open drain
+	} else {
+		//Push-pull
+		GpioCTL.bitfld.OBUFT = 0x00;
+	}
+
+	GpioCTL.bitfld.AOD = 0x01; //bits[10] 0=pin control bit[16] gpio output data bit enabled, 1=grouped output gpio enable
+
+	if ((flags & GPIO_INPUT) != 0U) {
+		GpioCTL.bitfld.DIR = 0x00; //bits[9] 0=input, 1=output
+	} else {
+		GpioCTL.bitfld.DIR = 0x01;
+
+		if ((flags & GPIO_OUTPUT_INIT_HIGH) != 0U) {
+			GpioCTL.bitfld.OUTVAL = 0x01; //bits[16] 0=output data=0, 1=output data=1
+
+			GpioCTL.bitfld.AOD = 0x00; //bits[10] 0=pin control bit[16] gpio output data bit enabled, 1=grouped output gpio enable
+		} else if ((flags & GPIO_OUTPUT_INIT_LOW) != 0U) {
+			GpioCTL.bitfld.OUTVAL = 0x00;
+		}
+	}
+
+	GpioCTL.bitfld.INPAD_DIS = 0x00; //bits[15] 0=don't disable input, 1=disable input
+
+	current_pcr1 = config->pcr1_base + pin;
+
+	*current_pcr1 = GpioCTL.VALUE;
+
+	return 0;
+}
+
 /*
  * notes: The GPIO parallel output bits are read-only until the
  * Alternate-Output-Disable (AOD) bit is set in the pin's control
@@ -321,7 +405,7 @@ static void gpio_gpio_xec_port_isr(const struct device *dev)
 }
 
 static const struct gpio_driver_api gpio_xec_driver_api = {
-	.pin_configure = gpio_xec_configure,
+	.pin_configure = gpio_ryan_configure,  //gpio_xec_configure, //
 	.port_get_raw = gpio_xec_port_get_raw,
 	.port_set_masked_raw = gpio_xec_port_set_masked_raw,
 	.port_set_bits_raw = gpio_xec_port_set_bits_raw,
