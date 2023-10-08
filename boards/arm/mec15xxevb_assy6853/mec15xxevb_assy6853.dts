@@ -31,6 +31,7 @@
 		i2c7 = &i2c_smb_2;
 		kscan0 = &kscan0;
 		watchdog0 = &wdog;
+		spi0 = &spi0;
 	};
 
 	leds {
@@ -209,11 +210,13 @@
 	status = "okay";
 	port_sel = <0>;
 	chip_select = <0>;
-	lines = <1>;
+	lines = <1>;/*<4>;*/
 	pinctrl-0 = < &shd_cs0_n_gpio055
 		      &shd_clk_gpio056
 		      &shd_io0_gpio223
 		      &shd_io1_gpio224 >;
+			  /*&shd_io2_gpio227
+			  &shd_io3_gpio016 >;*/
 	pinctrl-names = "default";
 };
 
